@@ -1,5 +1,7 @@
 # escape
 
+[![CI](https://github.com/Kronuz/escape/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/escape/actions/workflows/ci.yml)
+
 A small C++20 utility that turns an arbitrary byte buffer into a printable,
 C-string-style escaped representation, extracted from
 [Xapiand](https://github.com/Kronuz/Xapiand).
