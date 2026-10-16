@@ -1,0 +1,10 @@
+# escape: bytes in, a C-string-literal-style line out.
+# Render: d2 --layout elk --sketch --theme 302 docs/escape.d2 docs/escape.svg
+direction: right
+raw: bytes {
+  label: "it's ⇥ ESC\n(raw bytes)"
+}
+out: escaped {
+  label: "'it\\'s\\t\\x1b'"
+}
+raw -> out: "escape()"

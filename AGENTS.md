@@ -13,7 +13,8 @@ escape.cc        The single-pass escaping loop. Compiled; the library is NOT hea
 test/test.cc     Runnable smoke test: pass-through, named escapes, \xNN fallback, quote modes, overloads.
 CMakeLists.txt   STATIC library `escape` (+ alias escape::escape); FetchContent dep char-classify; CTest test `escape`.
 LICENSE          MIT, Copyright (c) 2015-2019 Dubalu LLC.
-README.md        What it is, install, usage.
+README.md        What it is, install, quick start.
+docs/API.md      Usage and the quoting rules.
 ARCHITECTURE.md  Internal design of the single pass and the quote argument.
 ```
 
