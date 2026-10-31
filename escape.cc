@@ -35,7 +35,7 @@
 // 1. A 256-entry table gives the output length of each byte (1 = copied as is,
 //    2 = backslash escape, 4 = \xNN), per quote mode.
 // 2. A first pass sums the lengths of the bytes, so the
-//    result is allocated once at its exact size (no 4n+2 zero-fill).
+//    result is allocated once at its exact size.
 // 3. A second pass writes it. Eight bytes at a time are tested with SWAR for
 //    "all plain printable" and bulk-copied; anything else goes byte by byte
 //    through the table.

@@ -59,17 +59,22 @@ int main() {
 
 `escape` sizes its result exactly (a table gives each byte's output length), then
 copies runs of plain printable bytes eight at a time and escapes the rest byte by
-byte. On Apple silicon (Apple clang 17, -O3), against the previous implementation: printable text
-3.8-6x faster (4 KB: 5.5 us to 0.91 us; `absl::CEscape`, which writes a different format, takes
-2.3 us), 10% non-printable 3.5x, all-binary 1.45x.
-Run it with `cmake -B build -DESCAPE_BUILD_BENCH=ON && cmake --build build && ./build/escape_bench`;
-`ctest` also runs a differential test against the previous implementation.
+byte. On Apple silicon (Apple clang 17, `-O3`), 4 KB of printable text takes
+0.91 us; `absl::CEscape`, which writes a different format, takes 2.3 us.
+
+```sh
+cmake -B build -DESCAPE_BUILD_BENCH=ON && cmake --build build && ./build/escape_bench
+```
+
+`ctest` checks the output byte for byte against a frozen copy of the previous
+implementation. [CHANGELOG.md](CHANGELOG.md) has the speedups over it.
 
 ## 📚 Documentation
 
 - [docs/API.md](docs/API.md): the overloads and the quoting rules.
 - [ARCHITECTURE.md](ARCHITECTURE.md): the escaping table.
 - [AGENTS.md](AGENTS.md): repository map and traps.
+- [CHANGELOG.md](CHANGELOG.md): what changed, and when.
 
 ## 🛠️ Building and testing
 

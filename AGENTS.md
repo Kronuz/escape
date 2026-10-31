@@ -9,13 +9,16 @@ easy to fall into.
 
 ```
 escape.hh        Declares escape(const void*, size_t, char) + string/string_view and rvalue-array wrappers. Header. Verbatim from Xapiand.
-escape.cc        The single-pass escaping loop. Compiled; the library is NOT header-only. Verbatim from Xapiand.
+escape.cc        Length table, measuring pass, SWAR block writer. Compiled; the library is NOT header-only.
 test/test.cc     Runnable smoke test: pass-through, named escapes, \xNN fallback, quote modes, overloads.
-CMakeLists.txt   STATIC library `escape` (+ alias escape::escape); FetchContent dep char-classify; CTest test `escape`.
-LICENSE          MIT, Copyright (c) 2015-2019 Dubalu LLC.
+test/diff_test.cc  Byte-for-byte comparison with test/escape_old.cc, the frozen pre-table implementation (never edit it).
+bench/bench.cc   Benchmark vs the frozen implementation and absl::CEscape when installed (ESCAPE_BUILD_BENCH).
+CMakeLists.txt   STATIC library `escape` (+ alias escape::escape); FetchContent dep char-classify; CTest tests `escape`, `escape_diff`.
+LICENSE          MIT, Copyright (c) 2026 Germán Méndez Bravo and (c) 2015-2020 Dubalu LLC.
+CHANGELOG.md     Behavior and performance changes, dated.
 README.md        What it is, install, quick start.
 docs/API.md      Usage and the quoting rules.
-ARCHITECTURE.md  Internal design of the single pass and the quote argument.
+ARCHITECTURE.md  Internal design of the two passes and the quote argument.
 ```
 
 The escaping logic lives in `escape.cc` and must be compiled and linked. The
@@ -66,7 +69,7 @@ not declare it separately.
   (`emit_byte`) and, if the set of "plain" bytes changes, the SWAR test (`dirty8`)
   together, or the writes run off the end.
 - **`test/diff_test.cc` pins the behavior.** It compares `escape()` with the frozen
-  previous implementation (`test/escape_old.cc`) on random and edge inputs in every
+  table-less implementation (`test/escape_old.cc`) on random and edge inputs in every
   quote mode.
 - **The `quote` argument is asserted to one of four values.** `'\0'` (no
   surrounding quotes, and no character treated as a quote to escape), `'\1'`
@@ -81,14 +84,13 @@ not declare it separately.
 
 ## How to extend
 
-- **Add a named escape (e.g. `\a`, `\b`, `\f`, `\v`).** The `switch` in
-  `escape.cc` already has these commented out. Uncomment or add a `case` that
-  writes the two-byte sequence. Each stays within the four-bytes-per-input-byte
-  budget, so no buffer-size change is needed.
-- **Always extend the smoke test.** `test/test.cc` is the only executable check.
-  When you add or change an escape rule, assert the exact output string for a
-  representative input, and include an embedded-NUL or high-byte case if it's
-  relevant.
+- **Add a named escape (e.g. `\a`, `\b`, `\f`, `\v`).** Give the byte length 2
+  and its letter in `rep` in `make_tab`. These are control bytes, so `dirty8`
+  already sends their blocks to the byte-by-byte writer. A named escape changes the
+  output, so `test/diff_test.cc` fails until it allows the changed bytes.
+- **Always extend the smoke test.** When you add or change an escape rule, assert
+  the exact output string for a representative input in `test/test.cc`, and
+  include an embedded-NUL or high-byte case if it's relevant.
 
 ## Traps
 
@@ -107,9 +109,9 @@ not declare it separately.
 ## Standalone vs. Xapiand
 
 This is a standalone extraction from
-[Xapiand](https://github.com/Kronuz/Xapiand). `escape.hh` and `escape.cc` were
-copied verbatim, license headers and `#include "chars.hh"` intact; the only delta
-is the build wiring (FetchContent pulls char-classify instead of finding it in
-Xapiand's tree). There was no source decoupling: the files had no `log.h`, opts,
-or config coupling. Keep it that way; any change here should be reconcilable with
-upstream as a plain edit.
+[Xapiand](https://github.com/Kronuz/Xapiand). `escape.hh` is the upstream header;
+`escape.cc` keeps the upstream behavior and output with the table-driven writer in
+`CHANGELOG.md`. The build wiring pulls char-classify through FetchContent instead
+of finding it in Xapiand's tree. Neither file has `log.h`, opts, or config
+coupling. Keep it that way; any change here should be reconcilable with upstream
+as a plain edit.

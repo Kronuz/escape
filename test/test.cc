@@ -90,7 +90,7 @@ static void test_hex_fallback() {
 
 static void test_quote_modes() {
 	// Double-quote mode: wrap in "...", and a literal " in the data is escaped,
-	// while a single quote now passes through.
+	// while a single quote passes through.
 	assert(escape(std::string("a\"b'c"), '"') == "\"a\\\"b'c\"");
 
 	// No-quote mode ('\0'): no surrounding quotes, and neither ' nor " is treated

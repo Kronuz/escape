@@ -1,7 +1,8 @@
 # Architecture
 
-The internals of `escape`: a single pass over a byte buffer that writes a
-printable, C-string-style escaped representation into a preallocated string. For
+The internals of `escape`: a measuring pass and a writing pass over a byte
+buffer that produce a printable, C-string-style escaped representation in a
+string sized exactly once. For
 usage see `README.md`; for the repo map and invariants see `AGENTS.md`.
 
 ## Shape
@@ -10,7 +11,7 @@ One compiled function and two header-only wrappers:
 
 ```
   escape.hh   declares escape(const void*, size_t, char) + string/array wrappers
-  escape.cc   the single-pass escaping loop
+  escape.cc   the length table, the measuring pass and the writer
 ```
 
 The wrappers in the header just forward into the one real function:
@@ -32,7 +33,7 @@ inline std::string escape(T (&&s)[N], char quote = '\'') {
 So there is exactly one place the escaping logic lives, `escape(const void* p,
 size_t size, char quote)` in `escape.cc`, and everything else is sugar over it.
 
-## The single pass
+## The two passes
 
 The output is allocated once at its exact size and written through a raw
 pointer, never reallocating mid-loop, and without zero-filling a worst-case
@@ -67,8 +68,8 @@ drops straight in.
   quote, and because the "is this byte the quote char?" test is guarded by
   `quote != '\0'`, no character is treated as a quote to escape either. You get
   the bare escaped body.
-- `'\1'` is a sentinel that is rewritten to `'\''` right after the buffer is
-  sized (`if (quote == '\1') { quote = '\''; }`). From there it is
+- `'\1'` is a sentinel that is rewritten to `'\''` on entry
+  (`if (quote == '\1') { quote = '\''; }`). From there it is
   indistinguishable from passing `'\''`. It exists so a caller can spell
   "single-quote mode" without writing a literal quote character.
 - `'\''` and `'"'` are the two ordinary quote characters: that character wraps
@@ -79,7 +80,7 @@ the `\xNN` fallback happen regardless of the quote mode.
 
 ## Why this shape
 
-The whole function is one allocation and one linear pass, which is what you want
+The whole function is one allocation and two linear passes, which is what you want
 for something that runs on the hot path of logging and error formatting. Sizing
 the result exactly (one cheap counting pass) avoids both reallocation and the
 zero-fill of a worst-case buffer, and block-wise copying makes printable text run at

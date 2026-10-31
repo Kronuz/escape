@@ -1,4 +1,4 @@
-// escape benchmark: new escape() against the frozen old implementation
+// escape benchmark: escape() against the frozen previous implementation
 // (test/escape_old.cc) and, when abseil is available, absl::CEscape (whose
 // output differs, so it is a speed reference only). Build with
 // -DESCAPE_BUILD_BENCH=ON. Reports the best of 7 samples in ns per call.
