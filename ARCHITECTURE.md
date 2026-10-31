@@ -34,24 +34,20 @@ size_t size, char quote)` in `escape.cc`, and everything else is sugar over it.
 
 ## The single pass
 
-The function sizes the output buffer up front and writes through a raw pointer,
-never reallocating mid-loop:
+The output is allocated once at its exact size and written through a raw
+pointer, never reallocating mid-loop, and without zero-filling a worst-case
+buffer:
 
-```cpp
-size = size * 4 + 2;  // worst case: every byte becomes "\xNN", plus two quotes
-std::string ret;
-ret.resize(size);
-char* d = &ret[0];
-```
-
-Four bytes per input byte is the worst case (`\xNN`), and the `+ 2` covers the
-opening and closing quote. Because the buffer is large enough for the worst case,
-the loop can write with a bare `*d++ =` and never bounds-check. At the end it
-shrinks the string to what was actually written: `ret.resize(d - buff)`.
+1. A 256-entry table (one per quote mode: none, `'`, `"`) gives each byte's output
+   length: 1 (copied), 2 (`\n`, `\r`, `\t`, `\\`, the active quote) or 4 (`\xNN`).
+2. A first pass sums those lengths, so `ret.resize(n)` is exact (plus the quotes).
+3. A second pass writes the result. It tests eight bytes at a time (one 64-bit
+   load, SWAR) for "none below 0x20 or at/above 0x7f, no backslash, no quote";
+   a clean block is copied with one 8-byte store, and any other block goes byte by
+   byte through the table, so escape-heavy input pays one extra test per eight bytes.
 
 The opening quote (if any) is written before the loop, the closing quote after.
-Inside the loop a `switch` on the byte handles the named escapes (`\n`, `\r`,
-`\t`, `\\`), and the `default` arm handles the rest in priority order:
+For a byte that is not copied, the rules, in priority order, are:
 
 1. if a quote character is active and the byte equals it, write `\` then the
    quote;
@@ -85,8 +81,9 @@ the `\xNN` fallback happen regardless of the quote mode.
 
 The whole function is one allocation and one linear pass, which is what you want
 for something that runs on the hot path of logging and error formatting. Sizing
-for the worst case up front trades a little slack memory (freed by the final
-`resize`) for a loop with no reallocation and no per-byte capacity check. The
+the result exactly (one cheap counting pass) avoids both reallocation and the
+zero-fill of a worst-case buffer, and block-wise copying makes printable text run at
+memory speed. The
 escaping rules match C string literals so the output is both human-readable and,
 for the common cases, paste-able. The hex fallback is ASCII-oriented by design:
 bytes at or above `0x7f` are escaped rather than passed through, so the result is

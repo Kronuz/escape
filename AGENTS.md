@@ -59,12 +59,15 @@ not declare it separately.
 
 ## Load-bearing invariants
 
-- **The output is sized for the worst case, then written without bounds checks.**
-  `size * 4 + 2` reserves room for every byte becoming `\xNN` plus two quotes, so
-  the loop writes with a bare `*d++ =` and the final `ret.resize(d - buff)`
-  shrinks to the real length. If you add an escape sequence longer than four
-  characters per input byte, you must widen that reservation or the writes run
-  off the end.
+- **The output is sized exactly, from the same table that writes it.** `escape.cc`
+  measures with the length table (`make_tab`), calls `ret.resize(n)` once and
+  writes with a bare `*d++ =` (an `assert` checks that exactly `n` bytes were
+  written). If you add or change an escape, change the table, the writer
+  (`emit_byte`) and, if the set of "plain" bytes changes, the SWAR test (`dirty8`)
+  together, or the writes run off the end.
+- **`test/diff_test.cc` pins the behavior.** It compares `escape()` with the frozen
+  previous implementation (`test/escape_old.cc`) on random and edge inputs in every
+  quote mode.
 - **The `quote` argument is asserted to one of four values.** `'\0'` (no
   surrounding quotes, and no character treated as a quote to escape), `'\1'`
   (rewritten to `'\''`), `'\''`, or `'"'`. Anything else trips the assertion.
@@ -98,9 +101,8 @@ not declare it separately.
   `\x00` inside the buffer is escaped like any other control byte. Build such
   inputs with an explicit size, not from a C string, or the NUL terminates early.
 - **`char_repr` advances the write pointer by two.** It takes a `char**` and
-  writes two lowercase hex chars. The worst-case buffer sizing already accounts
-  for it; if you change how the hex is written, recheck the `size * 4 + 2`
-  reservation.
+  writes two lowercase hex chars. The measuring pass counts those bytes (length 4
+  per `\xNN`); if you change how the hex is written, recheck the table.
 
 ## Standalone vs. Xapiand
 

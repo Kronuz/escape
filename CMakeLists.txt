@@ -39,4 +39,22 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(escape_test test/test.cc)
   target_link_libraries(escape_test PRIVATE escape)
   add_test(NAME escape COMMAND escape_test)
+
+  # Differential test against the frozen pre-optimization implementation.
+  add_executable(escape_diff_test test/diff_test.cc test/escape_old.cc)
+  target_link_libraries(escape_diff_test PRIVATE escape)
+  add_test(NAME escape_diff COMMAND escape_diff_test)
+
+  # Benchmark (not run by ctest): old vs new, plus absl::CEscape when abseil is
+  # installed. The comparator is optional and never a dependency of the library.
+  option(ESCAPE_BUILD_BENCH "Build bench/bench.cc" OFF)
+  if(ESCAPE_BUILD_BENCH)
+    add_executable(escape_bench bench/bench.cc test/escape_old.cc)
+    target_link_libraries(escape_bench PRIVATE escape)
+    find_package(absl QUIET)
+    if(absl_FOUND)
+      target_compile_definitions(escape_bench PRIVATE HAVE_ABSL=1)
+      target_link_libraries(escape_bench PRIVATE absl::strings)
+    endif()
+  endif()
 endif()
