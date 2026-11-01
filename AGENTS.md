@@ -69,6 +69,11 @@ not declare it separately.
   (an `assert` checks that exactly `n` bytes were written). The rules live in
   char-classify's `chars_escape.hh`; change an escape there, in the table, the writer
   and the vector test together (its AGENTS.md says how), not here.
+- **The entry point stays thin.** `escape()` takes fewer than `chars::escape_scalar_max`
+  bytes through the scalar kernel functions itself (one pass and a trim when the worst case
+  fits a small string, two passes otherwise) and sends everything else to
+  `escape_blocks` (`CHARS_NOINLINE`), which holds the table scratch and the block loops. In the
+  entry point those add a frame that costs more than escaping one to four bytes.
 - **`test/diff_test.cc` pins the behavior.** It compares `escape()` with the frozen
   table-less implementation (`test/escape_old.cc`) on random and edge inputs in every
   quote mode.

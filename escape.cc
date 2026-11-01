@@ -37,13 +37,15 @@
 //    exact size.
 // 3. A second pass writes it. Blocks of plain printable bytes are tested with SIMD (SWAR
 //    where there is none) and bulk-copied; the bytes that need an escape go through the table.
+//
+// Input of fewer than chars::escape_scalar_max bytes is escaped a byte at a time, in the entry
+// point itself: the same two passes, or one pass and a trim when even the worst case (four
+// bytes for each) fits a small string. The block loops live in escape_blocks, out of line, so
+// the entry point has no frame for them (the table scratch, the saved registers) to pay for.
 
-std::string escape(const void* p, size_t size, char quote) {
-	assert(quote == '\0' || quote == '\1' || quote == '\'' || quote == '"');
-	const auto* b = static_cast<const unsigned char *>(p);
-	const unsigned char* const e = b + size;
-	if (quote == '\1') { quote = '\''; }
+namespace {
 
+CHARS_NOINLINE std::string escape_blocks(const unsigned char* b, const unsigned char* e, char quote) {
 	chars::EscapeTable custom;
 	const chars::EscapeTable& t = chars::escape_table(quote, custom);  // custom: not reachable under the assert
 
@@ -56,4 +58,42 @@ std::string escape(const void* p, size_t size, char quote) {
 	if (quote != '\0') { *d++ = quote; }
 	assert(static_cast<std::size_t>(d - &ret[0]) == n);
 	return ret;
+}
+
+}  // namespace
+
+std::string escape(const void* p, size_t size, char quote) {
+	assert(quote == '\0' || quote == '\1' || quote == '\'' || quote == '"');
+	const auto* b = static_cast<const unsigned char *>(p);
+	const unsigned char* const e = b + size;
+	if (quote == '\1') { quote = '\''; }
+
+	if (size < chars::escape_scalar_max) {
+		if (const chars::EscapeTable* t = chars::escape_table_shared(quote)) {
+			std::string ret;
+			// A result that fits the small-string buffer even if every byte takes four is written in
+			// one pass over that worst case, then trimmed. Any other is measured first and allocated
+			// at its exact size.
+			const std::size_t most = size * 4 + 2;
+			if (most <= std::string().capacity()) {
+				ret.resize(most);
+				char* const s = &ret[0];
+				char* d = s;
+				if (quote != '\0') { *d++ = quote; }
+				d = chars::escape_emit_scalar(d, b, e, *t);
+				if (quote != '\0') { *d++ = quote; }
+				ret.resize(static_cast<std::size_t>(d - s));
+				return ret;
+			}
+			const std::size_t n = (quote != '\0' ? 2 : 0) + chars::escape_measure_scalar(b, e, *t);
+			ret.resize(n);
+			char* d = &ret[0];
+			if (quote != '\0') { *d++ = quote; }
+			d = chars::escape_emit_scalar(d, b, e, *t);
+			if (quote != '\0') { *d++ = quote; }
+			assert(static_cast<std::size_t>(d - &ret[0]) == n);
+			return ret;
+		}
+	}
+	return escape_blocks(b, e, quote);
 }

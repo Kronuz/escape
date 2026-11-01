@@ -9,24 +9,50 @@ release tags yet, so entries are dated.
 ### Added
 
 - `bench/bench.cc` has rows for 2, 4, 7 and 15 printable bytes (either side of the 8-byte step and the
-  16-byte block) and for 16 B and 4 KB that all need an escape under the double quote (the audit found
-  regressions on inputs the earlier rows did not cover). The frozen original and `escape` are sampled in
-  turn instead of one after the other, so a drift of the host hits both.
+  16-byte block), 1 B without a quote, 4 B under the double quote, 3 B under quote `\1`, and for 2 B, 4 B,
+  16 B and 4 KB that all need an escape under the double quote (the audit found regressions on inputs the
+  earlier rows did not cover). The frozen original and `escape` are sampled in turn instead of one after the
+  other, so a drift of the host hits both, and a column A/A gives how far apart two sets of samples of `escape`
+  are: the noise of the row.
+
+### Changed
+
+- **Input of fewer than 8 bytes is escaped by the entry point itself, a byte at a time.** The entry point used
+  to save the registers of the block loops and reserve the stack for the table of a custom quote before it
+  looked at the size, which cost 11% to 16% on 1 to 4 bytes. Now `escape()` tests the size first and, for the
+  quotes with a shared table, takes the byte loops of char-classify's `chars_escape.hh`
+  (`escape_measure_scalar`, `escape_emit_scalar`, with the tables of `escape_table_shared`) in one pass when the
+  worst case, four bytes for each, fits a small string, and in two otherwise. Everything else goes to
+  `escape_blocks`, out of line, which holds the table scratch and the block loops. Output is identical:
+  `test/diff_test.cc` compares it with the frozen original for 1 to 70 bytes in every quote mode. Reverting the
+  closing quote of either short path, the room for the quotes, the trim of the one-pass path, its worst case or
+  the table chosen for the double quote each fails a test. char-classify is pinned at the commit that has the
+  scalar functions.
 
 ### Measured
 
-Against the frozen original (`test/escape_old.cc`), three runs of `escape_bench` each, `-O3`, Apple clang 17:
+Against the frozen original (`test/escape_old.cc`), three runs of `escape_bench` each, `-O3`, Apple clang 17; A/A
+is under 7% on every row but one (12% on the i9 at 256 B with 10% control bytes):
 
 | workload | M4 Pro | i9-9980HK |
 |---|---:|---:|
-| printable 1 B | 1.04x-1.08x | 15.5-15.7 to 17.4-17.8 ns |
-| printable 2 B and 4 B | 0.98x-1.10x | 17.3 to 19.9-20.1 ns, 20.7-21.2 to 23.1-23.7 ns |
-| printable 7 B | 3.1x-3.3x faster | 2.5x-2.7x faster |
-| printable 15 B | 3.1x-3.2x faster | 2.5x-2.6x faster |
-| binary 16 B, quote `"` | 1.12x-1.25x faster | 1.08x-1.12x faster |
-| binary 4 KB, quote `"` | 3.4x faster | 3.0x-3.1x faster |
+| printable 1 B | 1.02x-1.06x | 0.97x-1.02x |
+| printable 1 B, no quote | 0.97x-1.03x | 1.01x-1.03x |
+| printable 2 B | 1.14x-1.20x | 1.05x-1.10x |
+| printable 4 B | 1.2x-1.4x | 1.17x-1.19x |
+| printable 4 B, quote `"` | 1.27x-1.37x | 1.12x-1.13x |
+| printable 3 B, quote `\1` | 1.10x-1.14x | 1.06x-1.12x |
+| printable 7 B | 3.3x-3.7x faster | 2.9x-3.0x faster |
+| printable 15 B | 2.9x-3.7x faster | 2.8x faster |
+| binary 2 B, quote `"` | 1.02x-1.05x | 1.03x-1.04x |
+| binary 4 B, quote `"` | 1.16x-1.28x | 1.11x-1.15x |
+| binary 16 B, quote `"` | 1.08x-1.32x faster | 1.01x-1.06x faster |
+| binary 4 KB, quote `"` | 3.4x-3.5x faster | 3.1x-3.2x faster |
 
-The 2026-10-31 table compares with the previous 8-byte kernel, which is not in the repository.
+One printable byte takes about 6.5 ns (M4 Pro) and 15.7 ns (i9) with either. No row is below 0.97x. The rows
+from 256 B up are within the noise of the run before the change (printable 4 KB on the M4 Pro: 8.1x to 10.4x
+faster than the original then and now). The 2026-10-31 table compares with the previous 8-byte kernel, which is
+not in the repository.
 
 ## 2026-10-31
 

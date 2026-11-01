@@ -55,6 +55,14 @@ buffer:
    [char-classify's ARCHITECTURE.md](https://github.com/Kronuz/char-classify/blob/main/ARCHITECTURE.md)
    describes the kernel.
 
+**Entry point.** For fewer than `chars::escape_scalar_max` (8) bytes, `escape()` escapes a byte at
+a time (`escape_measure_scalar`, `escape_emit_scalar`) in the entry point itself. When even the
+worst case (four bytes for each, plus the quotes) fits a small string, that is one pass over the
+worst case and a trim; otherwise it is the two passes, measuring first, so the result is
+allocated at its exact size. Everything else goes to `escape_blocks`, out of line,
+which holds the table scratch for a custom quote and the block loops. The entry point then has
+no frame for them to pay for.
+
 The opening quote (if any) is written before the loop, the closing quote after.
 For a byte that is not copied, the rules, in priority order, are:
 

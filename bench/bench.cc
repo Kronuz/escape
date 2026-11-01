@@ -40,14 +40,18 @@ static double best_ns(F&& f) {
 	return best;
 }
 
-// The best of seven samples of each, taken alternately.
+// The best of seven samples of each, taken alternately, and of a second set of samples of
+// `g`: `aa` is how far apart the two sets of `g` are, in percent (the noise of the row).
 template <typename F, typename G>
-static void best_pair(F&& f, G&& g, double& best_f, double& best_g) {
+static void best_pair(F&& f, G&& g, double& best_f, double& best_g, double& aa) {
 	best_f = best_g = 1e18;
+	double best_g2 = 1e18;
 	for (int s = 0; s < 7; ++s) {
 		best_f = std::min(best_f, sample_ns(f));
 		best_g = std::min(best_g, sample_ns(g));
+		best_g2 = std::min(best_g2, sample_ns(g));
 	}
+	aa = 100.0 * (best_g2 > best_g ? best_g2 - best_g : best_g - best_g2) / best_g;
 }
 
 static volatile size_t sink;
@@ -71,7 +75,7 @@ static std::string make_ctl(size_t n, int pct) {
 }
 
 int main() {
-	std::printf("%-22s %12s %12s %8s %12s\n", "workload", "old ns", "new ns", "x", "absl ns");
+	std::printf("%-26s %12s %12s %8s %12s %7s\n", "workload", "old ns", "new ns", "x", "absl ns", "A/A %");
 	struct W { const char* name; size_t n; int dirty; int ctl; };
 	const W ws[] = {
 		{"printable 1 B", 1, 0, 0}, {"printable 8 B", 8, 0, 0},
@@ -83,18 +87,18 @@ int main() {
 	};
 	for (const auto& w : ws) {
 		std::string s = w.ctl ? make_ctl(w.n, w.ctl) : make(w.n, w.dirty);
-		double o = 0, n = 0;
+		double o = 0, n = 0, aa = 0;
 		best_pair([&] { sink = escape_old(s.data(), s.size(), '\'').size(); },
-			[&] { sink = escape(s.data(), s.size(), '\'').size(); }, o, n);
+			[&] { sink = escape(s.data(), s.size(), '\'').size(); }, o, n, aa);
 		double a = 0;
 #ifdef HAVE_ABSL
 		a = best_ns([&] { sink = absl::CEscape(s).size(); });
 #endif
-		std::printf("%-22s %12.1f %12.1f %8.2f %12.1f\n", w.name, o, n, o / n, a);
+		std::printf("%-26s %12.1f %12.1f %8.2f %12.1f %7.1f\n", w.name, o, n, o / n, a, aa);
 	}
 
-	// Sizes either side of the 8-byte step and the 16-byte block, where the writer changes path, and
-	// bytes that all need an escape under the double quote.
+	// Sizes either side of the 8-byte step and the 16-byte block, where the writer changes path, the
+	// other quote modes, and bytes that all need an escape.
 	struct Edge { std::string name; std::string s; char quote; };
 	std::vector<Edge> edges;
 	for (size_t n : {2, 4, 7, 15}) {
@@ -102,16 +106,19 @@ int main() {
 		for (size_t i = 0; i < n; ++i) { s[i] = static_cast<char>('a' + i % 26); }
 		edges.push_back({"printable " + std::to_string(n) + " B", s, '\''});
 	}
-	for (size_t n : {16, 4096}) {
+	edges.push_back({"printable 1 B, no quote", "a", '\0'});
+	edges.push_back({"printable 4 B, quote \"", "abcd", '"'});
+	edges.push_back({"printable 3 B, quote \\1", "abc", '\1'});
+	for (size_t n : {2, 4, 16, 4096}) {
 		std::string s(n, '\0');
 		for (size_t i = 0; i < n; ++i) { s[i] = static_cast<char>(i * 37); }
 		edges.push_back({"binary " + std::to_string(n) + " B, quote \"", s, '"'});
 	}
 	for (const auto& e : edges) {
-		double o = 0, n = 0;
+		double o = 0, n = 0, aa = 0;
 		best_pair([&] { sink = escape_old(e.s.data(), e.s.size(), e.quote).size(); },
-			[&] { sink = escape(e.s.data(), e.s.size(), e.quote).size(); }, o, n);
-		std::printf("%-22s %12.1f %12.1f %8.2f %12.1f\n", e.name.c_str(), o, n, o / n, 0.0);
+			[&] { sink = escape(e.s.data(), e.s.size(), e.quote).size(); }, o, n, aa);
+		std::printf("%-26s %12.1f %12.1f %8.2f %12.1f %7.1f\n", e.name.c_str(), o, n, o / n, 0.0, aa);
 	}
 	return 0;
 }
