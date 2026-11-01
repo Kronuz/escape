@@ -4,6 +4,30 @@ All notable changes to this library. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The library has no
 release tags yet, so entries are dated.
 
+## 2026-11-01
+
+### Added
+
+- `bench/bench.cc` has rows for 2, 4, 7 and 15 printable bytes (either side of the 8-byte step and the
+  16-byte block) and for 16 B and 4 KB that all need an escape under the double quote (the audit found
+  regressions on inputs the earlier rows did not cover). The frozen original and `escape` are sampled in
+  turn instead of one after the other, so a drift of the host hits both.
+
+### Measured
+
+Against the frozen original (`test/escape_old.cc`), three runs of `escape_bench` each, `-O3`, Apple clang 17:
+
+| workload | M4 Pro | i9-9980HK |
+|---|---:|---:|
+| printable 1 B | 1.04x-1.08x | 15.5-15.7 to 17.4-17.8 ns |
+| printable 2 B and 4 B | 0.98x-1.10x | 17.3 to 19.9-20.1 ns, 20.7-21.2 to 23.1-23.7 ns |
+| printable 7 B | 3.1x-3.3x faster | 2.5x-2.7x faster |
+| printable 15 B | 3.1x-3.2x faster | 2.5x-2.6x faster |
+| binary 16 B, quote `"` | 1.12x-1.25x faster | 1.08x-1.12x faster |
+| binary 4 KB, quote `"` | 3.4x faster | 3.0x-3.1x faster |
+
+The 2026-10-31 table compares with the previous 8-byte kernel, which is not in the repository.
+
 ## 2026-10-31
 
 ### Changed

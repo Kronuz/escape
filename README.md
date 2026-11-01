@@ -84,6 +84,12 @@ Time per call, `-O3`, Apple clang 17, on an Apple M4 Pro and an Intel i9-9980HK
 `absl::CEscape` is faster for inputs of a few bytes (up to 8 on the M4 Pro, up to
 about 40 on the i9). From 256 bytes up, `escape` is ahead on every row measured.
 
+Against the frozen original (`test/escape_old.cc`, which `escape_bench` samples in turn with `escape`;
+three runs agree), inputs of 1 to 4 printable bytes are level on the M4 Pro (0.98x to 1.10x) and take 2 to 3 ns
+longer on the i9 (1 B: 15.6 to 17.7 ns, 4 B: 21 to 23 ns), 11% to 16% more, the fixed work of the
+kernel. From 7 bytes up `escape` is 2.5x to 3.7x faster up to 16 bytes on both machines. Sixteen bytes that all
+need an escape under the double quote are 1.1x to 1.25x faster, and 4 KB of them 3.0x to 3.4x.
+
 `ctest` checks the output byte for byte against a frozen copy of the previous
 implementation, in the vector and the portable (`CHARS_NO_SIMD`) build.
 [CHANGELOG.md](CHANGELOG.md) has the speedups over it.
