@@ -10,8 +10,8 @@ release tags yet, so entries are dated.
 
 - `bench/bench.cc` has rows for 2, 4, 7 and 15 printable bytes (either side of the 8-byte step and the
   16-byte block), 1 B without a quote, 4 B under the double quote, 3 B under quote `\1`, and for 2 B, 4 B,
-  16 B and 4 KB that all need an escape under the double quote (the audit found regressions on inputs the
-  earlier rows did not cover). The frozen original and `escape` are sampled in turn instead of one after the
+  16 B and 4 KB that all need an escape under the double quote (the earlier rows missed
+  regressions on these inputs). The frozen original and `escape` are sampled in turn instead of one after the
   other, so a drift of the host hits both, and a column A/A gives how far apart two sets of samples of `escape`
   are: the noise of the row.
 
@@ -67,7 +67,7 @@ not in the repository.
 
   The 2026-10-30 gain (3.5x for 10% non-printable input) was measured on Apple silicon
   only. On x86 the 8-byte SWAR kernel gained nothing on 64 KB mixed input, and
-  `absl::CEscape` was 2.3x faster (audit CR5). The 64 KB mixed row is now 3.7x faster than
+  `absl::CEscape` was 2.3x faster. The 64 KB mixed row is now 3.7x faster than
   that kernel on the i9 and 1.6x faster than `absl::CEscape`.
 
   Speedup over the previous kernel (minimum over three rounds of nine interleaved
