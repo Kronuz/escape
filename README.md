@@ -83,22 +83,26 @@ Not for:
 
 ## ⚡ Performance
 
-Time per call from `escape_bench`, the best of seven samples of at least 8 ms, `-O3`, Apple clang 17.
-Each machine column holds two times, `escape` / [`absl::CEscape`](https://abseil.io/docs/cpp/guides/strings)
-from [abseil](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0) 20260817.0 (Homebrew).
-`absl::CEscape` writes octal escapes where `escape` writes `\xNN`, so its output differs and it is
-a speed reference only. Rows are the input: printable text of the given length, text with 10% random
-bytes or 10% control characters, and bytes from `0x80` up (every byte needs an escape).
+Time per call from `escape_bench`, the best of seven samples of at least 8 ms, `-O3`, Apple clang 17,
+on an Apple M4 Pro (macOS 26, arm64) and an Intel Core i9-9980HK (macOS 15, x86-64). Each machine
+has three columns. `escape` is this library. *Plain loop* is the loop a caller writes without it,
+one `switch` per byte appending to a `std::string` (in `bench/bench.cc`); the benchmark checks that
+its output equals `escape`'s on every input before it times anything.
+[`absl::CEscape`](https://abseil.io/docs/cpp/guides/strings) is from
+[abseil](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0) 20260817.0 (Homebrew); it writes
+octal escapes where `escape` writes `\xNN`, so its output differs and it is a speed reference only.
+Rows are the input: printable text of the given length, text with 10% random bytes or 10% control
+characters, and bytes from `0x80` up (every byte needs an escape). Lower is faster.
 
-| input | Apple M4 Pro: `escape` / `absl::CEscape` | Intel Core i9-9980HK: `escape` / `absl::CEscape` |
-|---|---:|---:|
-| printable 16 B | 8 ns / 10 ns | 21 ns / 16 ns |
-| printable 256 B | 47 ns / 183 ns | 159 ns / 382 ns |
-| printable 4 KB | 422 ns / 2.2 us | 890 ns / 4.1 us |
-| printable 64 KB | 7.0 us / 35.5 us | 23.0 us / 64.9 us |
-| 10% random bytes, 64 KB | 13.2 us / 35.4 us | 38.8 us / 62.7 us |
-| 10% control bytes, 4 KB | 839 ns / 2.2 us | 1.7 us / 3.9 us |
-| bytes from `0x80` up, 4 KB | 1.7 us / 2.3 us | 3.1 us / 4.0 us |
+| input | M4 Pro: `escape` | plain loop | `absl::CEscape` | i9-9980HK: `escape` | plain loop | `absl::CEscape` |
+|---|---:|---:|---:|---:|---:|---:|
+| printable 16 B | 9.5 ns | 34.1 ns | 10.4 ns | 27.3 ns | 79.1 ns | 19.8 ns |
+| printable 256 B | 49.4 ns | 661 ns | 186 ns | 190 ns | 1.3 us | 436 ns |
+| printable 4 KB | 434 ns | 10.1 us | 2.3 us | 962 ns | 18.1 us | 4.2 us |
+| printable 64 KB | 7.2 us | 161 us | 36.1 us | 25.9 us | 288 us | 65.5 us |
+| 10% random bytes, 64 KB | 13.4 us | 212 us | 36.3 us | 48.0 us | 356 us | 67.1 us |
+| 10% control bytes, 4 KB | 876 ns | 13.6 us | 2.3 us | 1.8 us | 24.7 us | 4.2 us |
+| bytes from `0x80` up, 4 KB | 1.8 us | 26.0 us | 2.3 us | 3.2 us | 56.7 us | 4.1 us |
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DESCAPE_BUILD_BENCH=ON
@@ -106,7 +110,9 @@ cmake --build build --target escape_bench
 ./build/escape_bench
 ```
 
-From 256 bytes up `escape` is ahead on every row.
+From 256 bytes up `escape` is ahead of both comparators on every row. At 16 bytes it is 3x faster
+than the plain loop, and on par with `absl::CEscape` on the M4 Pro (9.5 ns against 10.4) and slower
+on the i9 (27 ns against 20).
 
 ## 📚 Documentation
 
