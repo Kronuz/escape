@@ -12,7 +12,7 @@ escape.hh        Declares escape(const void*, size_t, char) + string/string_view
 escape.cc        The entry point: quote handling, exact sizing, the quotes. The escaping kernel is char-classify's chars_escape.hh. Compiled; the library is NOT header-only.
 test/test.cc     Runnable smoke test: pass-through, named escapes, \xNN fallback, quote modes, overloads.
 test/diff_test.cc  Byte-for-byte comparison with test/escape_old.cc, the frozen pre-table implementation (never edit it).
-bench/bench.cc   Benchmark vs the frozen implementation and absl::CEscape when installed (ESCAPE_BUILD_BENCH).
+bench/bench.cc   Benchmark vs the frozen implementation and absl::CEscape when installed (ESCAPE_BUILD_BENCH); edge rows for sizes around the 8-byte step and the 16-byte block and for all-escape bytes under the double quote.
 CMakeLists.txt   STATIC library `escape` (+ alias escape::escape); FetchContent dep char-classify; CTest tests `escape`, `escape_diff` and their portable-backend twins `escape_swar`, `escape_diff_swar`.
 LICENSE          MIT, Copyright (c) 2026 Germán Méndez Bravo and (c) 2015-2020 Dubalu LLC.
 CHANGELOG.md     Behavior and performance changes, dated.

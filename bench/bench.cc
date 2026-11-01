@@ -1,11 +1,15 @@
 // escape benchmark: escape() against the frozen previous implementation
 // (test/escape_old.cc) and, when abseil is available, absl::CEscape (whose
 // output differs, so it is a speed reference only). Build with
-// -DESCAPE_BUILD_BENCH=ON. Reports the best of 7 samples in ns per call.
+// -DESCAPE_BUILD_BENCH=ON. Reports ns per call, the best of seven samples of at least
+// 8 ms; the old and the new implementation are sampled in turn, so a drift of the host
+// or of the clock hits both.
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <random>
 #include <string>
+#include <vector>
 
 #include "escape.hh"
 #ifdef HAVE_ABSL
@@ -14,23 +18,36 @@
 
 std::string escape_old(const void* p, size_t size, char quote);
 
+// One sample: ns per call over at least 8 ms.
+template <typename F>
+static double sample_ns(F&& f) {
+	using clk = std::chrono::steady_clock;
+	long iters = 0;
+	auto t0 = clk::now();
+	auto t1 = t0;
+	do {
+		for (int i = 0; i < 16; ++i) { f(); }
+		iters += 16;
+		t1 = clk::now();
+	} while (t1 - t0 < std::chrono::milliseconds(8));
+	return std::chrono::duration<double, std::nano>(t1 - t0).count() / iters;
+}
+
 template <typename F>
 static double best_ns(F&& f) {
-	using clk = std::chrono::steady_clock;
 	double best = 1e18;
-	for (int s = 0; s < 7; ++s) {
-		long iters = 0;
-		auto t0 = clk::now();
-		auto t1 = t0;
-		do {
-			for (int i = 0; i < 16; ++i) { f(); }
-			iters += 16;
-			t1 = clk::now();
-		} while (t1 - t0 < std::chrono::milliseconds(8));
-		double ns = std::chrono::duration<double, std::nano>(t1 - t0).count() / iters;
-		if (ns < best) { best = ns; }
-	}
+	for (int s = 0; s < 7; ++s) { best = std::min(best, sample_ns(f)); }
 	return best;
+}
+
+// The best of seven samples of each, taken alternately.
+template <typename F, typename G>
+static void best_pair(F&& f, G&& g, double& best_f, double& best_g) {
+	best_f = best_g = 1e18;
+	for (int s = 0; s < 7; ++s) {
+		best_f = std::min(best_f, sample_ns(f));
+		best_g = std::min(best_g, sample_ns(g));
+	}
 }
 
 static volatile size_t sink;
@@ -66,13 +83,35 @@ int main() {
 	};
 	for (const auto& w : ws) {
 		std::string s = w.ctl ? make_ctl(w.n, w.ctl) : make(w.n, w.dirty);
-		double o = best_ns([&] { sink = escape_old(s.data(), s.size(), '\'').size(); });
-		double n = best_ns([&] { sink = escape(s.data(), s.size(), '\'').size(); });
+		double o = 0, n = 0;
+		best_pair([&] { sink = escape_old(s.data(), s.size(), '\'').size(); },
+			[&] { sink = escape(s.data(), s.size(), '\'').size(); }, o, n);
 		double a = 0;
 #ifdef HAVE_ABSL
 		a = best_ns([&] { sink = absl::CEscape(s).size(); });
 #endif
 		std::printf("%-22s %12.1f %12.1f %8.2f %12.1f\n", w.name, o, n, o / n, a);
+	}
+
+	// Sizes either side of the 8-byte step and the 16-byte block, where the writer changes path, and
+	// bytes that all need an escape under the double quote.
+	struct Edge { std::string name; std::string s; char quote; };
+	std::vector<Edge> edges;
+	for (size_t n : {2, 4, 7, 15}) {
+		std::string s(n, 'a');
+		for (size_t i = 0; i < n; ++i) { s[i] = static_cast<char>('a' + i % 26); }
+		edges.push_back({"printable " + std::to_string(n) + " B", s, '\''});
+	}
+	for (size_t n : {16, 4096}) {
+		std::string s(n, '\0');
+		for (size_t i = 0; i < n; ++i) { s[i] = static_cast<char>(i * 37); }
+		edges.push_back({"binary " + std::to_string(n) + " B, quote \"", s, '"'});
+	}
+	for (const auto& e : edges) {
+		double o = 0, n = 0;
+		best_pair([&] { sink = escape_old(e.s.data(), e.s.size(), e.quote).size(); },
+			[&] { sink = escape(e.s.data(), e.s.size(), e.quote).size(); }, o, n);
+		std::printf("%-22s %12.1f %12.1f %8.2f %12.1f\n", e.name.c_str(), o, n, o / n, 0.0);
 	}
 	return 0;
 }
