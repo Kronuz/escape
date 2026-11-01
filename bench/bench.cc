@@ -1,9 +1,10 @@
 // escape benchmark: escape() against the frozen previous implementation
-// (test/escape_old.cc) and, when abseil is available, absl::CEscape (whose
-// output differs, so it is a speed reference only). Build with
-// -DESCAPE_BUILD_BENCH=ON. Reports ns per call, the best of seven samples of at least
-// 8 ms; the old and the new implementation are sampled in turn, so a drift of the host
-// or of the clock hits both.
+// (test/escape_old.cc), a plain loop (the one a caller writes without the library: one
+// switch per byte, appending to a std::string; its output must equal escape()'s, which is
+// checked before any timing) and, when abseil is available, absl::CEscape (whose output
+// differs, so it is a speed reference only). Build with -DESCAPE_BUILD_BENCH=ON. Reports
+// ns per call, the best of seven samples of at least 8 ms; the old and the new
+// implementation are sampled in turn, so a drift of the host or of the clock hits both.
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -17,6 +18,38 @@
 #endif
 
 std::string escape_old(const void* p, size_t size, char quote);
+
+// The loop one writes without the library, with the same output as escape().
+static std::string plain_escape(const void* p, size_t size, char quote) {
+	static const char hex[] = "0123456789abcdef";
+	const auto* q = static_cast<const unsigned char*>(p);
+	if (quote == '\1') { quote = '\''; }
+	std::string out;
+	out.reserve(size + 2);
+	if (quote != '\0') { out.push_back(quote); }
+	for (size_t i = 0; i < size; ++i) {
+		const unsigned char c = q[i];
+		switch (c) {
+			case '\n': out += "\\n"; break;
+			case '\r': out += "\\r"; break;
+			case '\t': out += "\\t"; break;
+			case '\\': out += "\\\\"; break;
+			default:
+				if (quote != '\0' && c == static_cast<unsigned char>(quote)) {
+					out.push_back('\\');
+					out.push_back(quote);
+				} else if (c < ' ' || c >= 0x7f) {
+					out += "\\x";
+					out.push_back(hex[c >> 4]);
+					out.push_back(hex[c & 15]);
+				} else {
+					out.push_back(static_cast<char>(c));
+				}
+		}
+	}
+	if (quote != '\0') { out.push_back(quote); }
+	return out;
+}
 
 // One sample: ns per call over at least 8 ms.
 template <typename F>
@@ -75,7 +108,7 @@ static std::string make_ctl(size_t n, int pct) {
 }
 
 int main() {
-	std::printf("%-26s %12s %12s %8s %12s %7s\n", "workload", "old ns", "new ns", "x", "absl ns", "A/A %");
+	std::printf("%-26s %12s %12s %8s %12s %12s %7s\n", "workload", "old ns", "new ns", "x", "plain ns", "absl ns", "A/A %");
 	struct W { const char* name; size_t n; int dirty; int ctl; };
 	const W ws[] = {
 		{"printable 1 B", 1, 0, 0}, {"printable 8 B", 8, 0, 0},
@@ -87,14 +120,16 @@ int main() {
 	};
 	for (const auto& w : ws) {
 		std::string s = w.ctl ? make_ctl(w.n, w.ctl) : make(w.n, w.dirty);
+		if (plain_escape(s.data(), s.size(), '\'') != escape(s.data(), s.size(), '\'')) { std::printf("MISMATCH plain loop, %s\n", w.name); return 1; }
 		double o = 0, n = 0, aa = 0;
 		best_pair([&] { sink = escape_old(s.data(), s.size(), '\'').size(); },
 			[&] { sink = escape(s.data(), s.size(), '\'').size(); }, o, n, aa);
+		const double pl = best_ns([&] { sink = plain_escape(s.data(), s.size(), '\'').size(); });
 		double a = 0;
 #ifdef HAVE_ABSL
 		a = best_ns([&] { sink = absl::CEscape(s).size(); });
 #endif
-		std::printf("%-26s %12.1f %12.1f %8.2f %12.1f %7.1f\n", w.name, o, n, o / n, a, aa);
+		std::printf("%-26s %12.1f %12.1f %8.2f %12.1f %12.1f %7.1f\n", w.name, o, n, o / n, pl, a, aa);
 	}
 
 	// Sizes either side of the 8-byte step and the 16-byte block, where the writer changes path, the
@@ -115,10 +150,12 @@ int main() {
 		edges.push_back({"binary " + std::to_string(n) + " B, quote \"", s, '"'});
 	}
 	for (const auto& e : edges) {
+		if (plain_escape(e.s.data(), e.s.size(), e.quote) != escape(e.s.data(), e.s.size(), e.quote)) { std::printf("MISMATCH plain loop, %s\n", e.name.c_str()); return 1; }
 		double o = 0, n = 0, aa = 0;
 		best_pair([&] { sink = escape_old(e.s.data(), e.s.size(), e.quote).size(); },
 			[&] { sink = escape(e.s.data(), e.s.size(), e.quote).size(); }, o, n, aa);
-		std::printf("%-26s %12.1f %12.1f %8.2f %12.1f %7.1f\n", e.name.c_str(), o, n, o / n, 0.0, aa);
+		const double pl = best_ns([&] { sink = plain_escape(e.s.data(), e.s.size(), e.quote).size(); });
+		std::printf("%-26s %12.1f %12.1f %8.2f %12.1f %12.1f %7.1f\n", e.name.c_str(), o, n, o / n, pl, 0.0, aa);
 	}
 	return 0;
 }

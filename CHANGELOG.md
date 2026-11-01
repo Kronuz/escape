@@ -8,6 +8,8 @@ release tags yet, so entries are dated.
 
 ### Added
 
+- `bench/bench.cc` times a plain loop (one `switch` per byte appending to a `std::string`)
+  beside `escape`, and checks that its output equals `escape`'s on every input first.
 - `bench/bench.cc` has rows for 2, 4, 7 and 15 printable bytes (either side of the 8-byte step and the
   16-byte block), 1 B without a quote, 4 B under the double quote, 3 B under quote `\1`, and for 2 B, 4 B,
   16 B and 4 KB that all need an escape under the double quote (the earlier rows missed
