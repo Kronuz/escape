@@ -9,11 +9,11 @@ easy to fall into.
 
 ```
 escape.hh        Declares escape(const void*, size_t, char) + string/string_view and rvalue-array wrappers. Header. Verbatim from Xapiand.
-escape.cc        Length table, measuring pass, SWAR block writer. Compiled; the library is NOT header-only.
+escape.cc        The entry point: quote handling, exact sizing, the quotes. The escaping kernel is char-classify's chars_escape.hh. Compiled; the library is NOT header-only.
 test/test.cc     Runnable smoke test: pass-through, named escapes, \xNN fallback, quote modes, overloads.
 test/diff_test.cc  Byte-for-byte comparison with test/escape_old.cc, the frozen pre-table implementation (never edit it).
 bench/bench.cc   Benchmark vs the frozen implementation and absl::CEscape when installed (ESCAPE_BUILD_BENCH).
-CMakeLists.txt   STATIC library `escape` (+ alias escape::escape); FetchContent dep char-classify; CTest tests `escape`, `escape_diff`.
+CMakeLists.txt   STATIC library `escape` (+ alias escape::escape); FetchContent dep char-classify; CTest tests `escape`, `escape_diff` and their portable-backend twins `escape_swar`, `escape_diff_swar`.
 LICENSE          MIT, Copyright (c) 2026 Germán Méndez Bravo and (c) 2015-2020 Dubalu LLC.
 CHANGELOG.md     Behavior and performance changes, dated.
 README.md        What it is, install, quick start.
@@ -42,9 +42,10 @@ consumers vendoring it via `FetchContent` won't build it.
 
 The one dependency is
 [char-classify](https://github.com/Kronuz/char-classify), pulled via
-`FetchContent` with `GIT_TAG main` and linked `PUBLIC`. `escape.cc` includes
-`"chars.hh"` and calls `chars::char_repr` to render the two-char lowercase hex of
-a byte for the `\xNN` fallback. Because the link is `PUBLIC`, a consumer that
+`FetchContent` at the commit `CMakeLists.txt` pins and linked `PUBLIC`. `escape.cc`
+includes `"chars_escape.hh"`: the length table, the measuring pass and the writer,
+shared with `repr`, which use `chars_simd.hh` for the block tests and
+`chars::char_repr` for the `\xNN` fallback. Because the link is `PUBLIC`, a consumer that
 links `escape::escape` gets char-classify's include path transitively and does
 not declare it separately.
 
@@ -53,8 +54,8 @@ not declare it separately.
 - **C++20.** The target requests `cxx_std_20` `PUBLIC` to stay uniform with
   char-classify and the rest of the family.
 - **One real dependency: char-classify.** Don't add others, and don't reach for
-  `<cctype>` or a hand-rolled hex table; the hex rendering goes through
-  `chars::char_repr` so it matches the family.
+  `<cctype>` or a hand-rolled hex table or escaping loop; the kernel and the hex
+  rendering come from char-classify so `escape` and `repr` match each other and the family.
 - **Filenames are stable.** The header and source keep their original Xapiand
   names (`escape.hh`, `escape.cc`) so a consumer that already `#include`s the
   header just needs this repo on the include path. Don't rename them.
@@ -63,11 +64,11 @@ not declare it separately.
 ## Load-bearing invariants
 
 - **The output is sized exactly, from the same table that writes it.** `escape.cc`
-  measures with the length table (`make_tab`), calls `ret.resize(n)` once and
-  writes with a bare `*d++ =` (an `assert` checks that exactly `n` bytes were
-  written). If you add or change an escape, change the table, the writer
-  (`emit_byte`) and, if the set of "plain" bytes changes, the SWAR test (`dirty8`)
-  together, or the writes run off the end.
+  measures with `chars::escape_measure`, calls `ret.resize(n)` once and writes with
+  `chars::escape_emit`, which stores through a bare pointer inside the measured room
+  (an `assert` checks that exactly `n` bytes were written). The rules live in
+  char-classify's `chars_escape.hh`; change an escape there, in the table, the writer
+  and the vector test together (its AGENTS.md says how), not here.
 - **`test/diff_test.cc` pins the behavior.** It compares `escape()` with the frozen
   table-less implementation (`test/escape_old.cc`) on random and edge inputs in every
   quote mode.
@@ -84,10 +85,12 @@ not declare it separately.
 
 ## How to extend
 
-- **Add a named escape (e.g. `\a`, `\b`, `\f`, `\v`).** Give the byte length 2
-  and its letter in `rep` in `make_tab`. These are control bytes, so `dirty8`
-  already sends their blocks to the byte-by-byte writer. A named escape changes the
-  output, so `test/diff_test.cc` fails until it allows the changed bytes.
+- **Add a named escape (e.g. `\a`, `\b`, `\f`, `\v`).** It is a change to the kernel in
+  char-classify: give the byte length 2 and its letter in `rep` in `make_escape_table`
+  (control bytes are already flagged by the block tests, so nothing else decides which
+  blocks need the table), then bump this repo's pin. The two-byte count in
+  `escape_measure` lists the named escapes, so it changes with them. A named escape
+  changes the output, so `test/diff_test.cc` fails until it allows the changed bytes.
 - **Always extend the smoke test.** When you add or change an escape rule, assert
   the exact output string for a representative input in `test/test.cc`, and
   include an embedded-NUL or high-byte case if it's relevant.
@@ -103,8 +106,8 @@ not declare it separately.
   `\x00` inside the buffer is escaped like any other control byte. Build such
   inputs with an explicit size, not from a C string, or the NUL terminates early.
 - **`char_repr` advances the write pointer by two.** It takes a `char**` and
-  writes two lowercase hex chars. The measuring pass counts those bytes (length 4
-  per `\xNN`); if you change how the hex is written, recheck the table.
+  writes two lowercase hex chars. The kernel's measuring pass counts those bytes (length 4
+  per `\xNN`); if you change how the hex is written, recheck the table there.
 
 ## Standalone vs. Xapiand
 

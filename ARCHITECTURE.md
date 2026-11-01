@@ -11,8 +11,13 @@ One compiled function and two header-only wrappers:
 
 ```
   escape.hh   declares escape(const void*, size_t, char) + string/array wrappers
-  escape.cc   the length table, the measuring pass and the writer
+  escape.cc   the entry point: quote handling, exact sizing, the opening and closing quote
 ```
+
+The length table, the measuring pass and the writer are char-classify's
+`chars_escape.hh` (`chars::escape_measure`, `chars::escape_emit`), shared with
+`repr()`; `escape()` is `repr(p, n, true, q, 0)` without the truncation, and both call
+the same kernel so they cannot disagree.
 
 The wrappers in the header just forward into the one real function:
 
@@ -30,8 +35,8 @@ inline std::string escape(T (&&s)[N], char quote = '\'') {
 }
 ```
 
-So there is exactly one place the escaping logic lives, `escape(const void* p,
-size_t size, char quote)` in `escape.cc`, and everything else is sugar over it.
+So there is exactly one place the escaping logic of this repository lives, `escape(const
+void* p, size_t size, char quote)` in `escape.cc`, and everything else is sugar over it.
 
 ## The two passes
 
@@ -42,10 +47,13 @@ buffer:
 1. A 256-entry table (one per quote mode: none, `'`, `"`) gives each byte's output
    length: 1 (copied), 2 (`\n`, `\r`, `\t`, `\\`, the active quote) or 4 (`\xNN`).
 2. A first pass sums those lengths, so `ret.resize(n)` is exact (plus the quotes).
-3. A second pass writes the result. It tests eight bytes at a time (one 64-bit
-   load, SWAR) for "none below 0x20 or at/above 0x7f, no backslash, no quote";
-   a clean block is copied with one 8-byte store, and any other block goes byte by
-   byte through the table, so escape-heavy input pays one extra test per eight bytes.
+3. A second pass writes the result. It tests a block of bytes at a time for "none
+   below 0x20 or at/above 0x7f, no backslash, no quote": 16 bytes with NEON or SSE2,
+   8 with a 64-bit SWAR test where there is neither. A clean block is copied with one
+   store; the escapes of any other block are found from its mask, the bytes between
+   them are copied with block stores, and each escape is written from its table entry.
+   [char-classify's ARCHITECTURE.md](https://github.com/Kronuz/char-classify/blob/main/ARCHITECTURE.md)
+   describes the kernel.
 
 The opening quote (if any) is written before the loop, the closing quote after.
 For a byte that is not copied, the rules, in priority order, are:

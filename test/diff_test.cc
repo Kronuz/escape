@@ -41,13 +41,30 @@ int main() {
 		}
 		for (char q : quotes) { check(s, q); }
 	}
-	// Every byte value at every position of 1..17 byte windows (covers the 8-byte block edges).
+	// Every byte value at every position of 1..70 byte windows: the 8-byte block edges, the
+	// 16-byte vector loop (it runs while 32 bytes remain) and the tails behind it.
 	for (int c = 0; c < 256; ++c) {
-		for (size_t n = 1; n <= 17; ++n) {
+		for (size_t n = 1; n <= 70; ++n) {
 			for (size_t pos = 0; pos < n; ++pos) {
 				std::string s(n, 'k');
 				s[pos] = static_cast<char>(c);
 				for (char q : quotes) { check(s, q); }
+			}
+		}
+	}
+	// Two escapes in one block, at every pair of positions of a 40 byte window.
+	{
+		const char sp[] = {'\n', '\\', '\'', '"', 0x1f, 0x7f, char(0xff), '\0'};
+		for (char a : sp) {
+			for (char b : sp) {
+				for (size_t i = 0; i < 40; ++i) {
+					for (size_t j = i + 1; j < 40; ++j) {
+						std::string s(40, 'k');
+						s[i] = a;
+						s[j] = b;
+						for (char q : quotes) { check(s, q); }
+					}
+				}
 			}
 		}
 	}

@@ -58,9 +58,11 @@ int main() {
 ## ⚡ Performance
 
 `escape` sizes its result exactly (a table gives each byte's output length), then
-copies runs of plain printable bytes eight at a time and escapes the rest byte by
-byte. On Apple silicon (Apple clang 17, `-O3`), 4 KB of printable text takes
-0.91 us; `absl::CEscape`, which writes a different format, takes 2.3 us.
+tests the input a block at a time (16 bytes with NEON or SSE2, 8 with a portable
+fallback): a clean block is copied whole and the escapes of any other block are
+written from the table. The kernel is [char-classify](https://github.com/Kronuz/char-classify)'s
+`chars_escape.hh`, shared with `repr`. `absl::CEscape` writes a different format, so
+the benchmark uses it as a speed reference only.
 
 ```sh
 cmake -B build -DESCAPE_BUILD_BENCH=ON && cmake --build build && ./build/escape_bench
