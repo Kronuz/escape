@@ -68,8 +68,25 @@ the benchmark uses it as a speed reference only.
 cmake -B build -DESCAPE_BUILD_BENCH=ON && cmake --build build && ./build/escape_bench
 ```
 
+Time per call, `-O3`, Apple clang 17, on an Apple M4 Pro and an Intel i9-9980HK
+(minimum over interleaved samples; `escape_bench` prints the same rows):
+
+| input | M4 Pro: `escape` / `absl::CEscape` | i9-9980HK: `escape` / `absl::CEscape` |
+|---|---:|---:|
+| printable 16 B | 8 ns / 10 ns | 21 ns / 16 ns |
+| printable 256 B | 47 ns / 183 ns | 159 ns / 382 ns |
+| printable 4 KB | 422 ns / 2.2 us | 890 ns / 4.1 us |
+| printable 64 KB | 7.0 us / 35.5 us | 23.0 us / 64.9 us |
+| mixed 10% 64 KB | 13.2 us / 35.4 us | 38.8 us / 62.7 us |
+| 10% control bytes, 4 KB | 839 ns / 2.2 us | 1.7 us / 3.9 us |
+| binary 4 KB | 1.7 us / 2.3 us | 3.1 us / 4.0 us |
+
+`absl::CEscape` is faster for inputs of a few bytes (up to 8 on the M4 Pro, up to
+about 40 on the i9). From 256 bytes up, `escape` is ahead on every row measured.
+
 `ctest` checks the output byte for byte against a frozen copy of the previous
-implementation. [CHANGELOG.md](CHANGELOG.md) has the speedups over it.
+implementation, in the vector and the portable (`CHARS_NO_SIMD`) build.
+[CHANGELOG.md](CHANGELOG.md) has the speedups over it.
 
 ## 📚 Documentation
 
