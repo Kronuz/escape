@@ -83,9 +83,12 @@ Not for:
 
 ## ⚡ Performance
 
-Time per call, the best of seven samples of at least 8 ms; `-O3`, Apple clang 17,
-abseil 20260817.0. `absl::CEscape` writes a different format, so it is a speed
-reference only:
+Time per call from `escape_bench`, the best of seven samples of at least 8 ms, `-O3`, Apple clang 17.
+Each machine column holds two times, `escape` / [`absl::CEscape`](https://abseil.io/docs/cpp/guides/strings)
+from [abseil](https://github.com/abseil/abseil-cpp/releases/tag/20260817.0) 20260817.0 (Homebrew).
+`absl::CEscape` writes octal escapes where `escape` writes `\xNN`, so its output differs and it is
+a speed reference only. Rows are the input: printable text of the given length, text with 10% random
+bytes or 10% control characters, and bytes from `0x80` up (every byte needs an escape).
 
 | input | Apple M4 Pro: `escape` / `absl::CEscape` | Intel Core i9-9980HK: `escape` / `absl::CEscape` |
 |---|---:|---:|
@@ -103,9 +106,7 @@ cmake --build build --target escape_bench
 ./build/escape_bench
 ```
 
-From 256 bytes up `escape` is ahead on every row. `escape_bench` also times the
-frozen original (`test/escape_old.cc`); [CHANGELOG.md](CHANGELOG.md) has that
-comparison.
+From 256 bytes up `escape` is ahead on every row.
 
 ## 📚 Documentation
 
