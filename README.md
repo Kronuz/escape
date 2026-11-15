@@ -116,6 +116,8 @@ on the i9 (27 ns against 20).
 
 ## 📚 Documentation
 
+- [The Bag of Holding](https://kronuz.github.io/blog/bag-of-holding/):
+  the Familiars post that covers `escape` among the small helpers.
 - [docs/API.md](docs/API.md): the overloads and the quoting rules.
 - [ARCHITECTURE.md](ARCHITECTURE.md): the two passes and the quote argument.
 - [CHANGELOG.md](CHANGELOG.md): what changed, with numbers.
